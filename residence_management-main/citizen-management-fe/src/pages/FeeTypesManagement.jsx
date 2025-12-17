@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Eye, Pencil, Plus, Trash2, DollarSign, CheckCircle2, XCircle } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Header from "../headers/Header";
@@ -6,8 +7,11 @@ import Header from "../headers/Header";
 const API_BASE = "http://localhost:8080/api";
 
 export default function FeeTypesManagement() {
+  const navigate = useNavigate();
   const [feeTypes, setFeeTypes] = useState([]);
+  const [feeTotals, setFeeTotals] = useState({}); // Lưu tổng tiền đã thu theo maLoaiPhi
   const [loading, setLoading] = useState(false);
+  const [loadingTotals, setLoadingTotals] = useState(false);
   const [error, setError] = useState("");
   const [selectedFeeType, setSelectedFeeType] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -20,6 +24,7 @@ export default function FeeTypesManagement() {
     moTa: "",
     batBuoc: false,
     dinhMuc: "",
+    mucTieu: "",
   });
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -28,6 +33,13 @@ export default function FeeTypesManagement() {
     fetchFeeTypes();
   }, []);
 
+  useEffect(() => {
+    // Fetch tổng tiền đã thu cho từng loại phí bắt buộc
+    if (feeTypes.length > 0) {
+      fetchFeeTotals();
+    }
+  }, [feeTypes]);
+
   const fetchFeeTypes = async () => {
     try {
       setLoading(true);
@@ -35,12 +47,43 @@ export default function FeeTypesManagement() {
       const res = await fetch(`${API_BASE}/loai-phi`);
       if (!res.ok) throw new Error(`API lỗi: ${res.status}`);
       const data = await res.json();
-      setFeeTypes(data || []);
+      // Lọc chỉ hiển thị các loại phí bắt buộc
+      const mandatoryFees = (data || []).filter(fee => fee.batBuoc === true);
+      setFeeTypes(mandatoryFees);
     } catch (err) {
       console.error(err);
       setError("Không thể tải danh sách loại phí. Vui lòng thử lại.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFeeTotals = async () => {
+    try {
+      setLoadingTotals(true);
+      const totals = {};
+      // Fetch tổng tiền cho từng loại phí bắt buộc
+      await Promise.all(
+        feeTypes.map(async (fee) => {
+          try {
+            const res = await fetch(`${API_BASE}/reports/fees/${fee.maLoaiPhi}/total`);
+            if (res.ok) {
+              const data = await res.json();
+              totals[fee.maLoaiPhi] = data.totalCollected || 0;
+            } else {
+              totals[fee.maLoaiPhi] = 0;
+            }
+          } catch (err) {
+            console.error(`Error fetching total for fee ${fee.maLoaiPhi}:`, err);
+            totals[fee.maLoaiPhi] = 0;
+          }
+        })
+      );
+      setFeeTotals(totals);
+    } catch (err) {
+      console.error("Error fetching fee totals:", err);
+    } finally {
+      setLoadingTotals(false);
     }
   };
 
@@ -58,7 +101,17 @@ export default function FeeTypesManagement() {
   };
 
   const handleViewDetail = (feeType) => {
-    fetchFeeTypeDetail(feeType.maLoaiPhi);
+    // Nếu là phí vệ sinh, điều hướng đến trang phí vệ sinh
+    const isSanitationFee = feeType.tenLoaiPhi?.toLowerCase().includes("vệ sinh") || 
+                           feeType.tenLoaiPhi?.toLowerCase().includes("ve sinh") ||
+                           feeType.maLoaiPhi === 1;
+    
+    if (isSanitationFee) {
+      navigate("/fees/sanitation");
+    } else {
+      // Các phí bắt buộc khác, hiển thị modal chi tiết
+      fetchFeeTypeDetail(feeType.maLoaiPhi);
+    }
   };
 
   const handleEdit = (feeType) => {
@@ -67,6 +120,7 @@ export default function FeeTypesManagement() {
       moTa: feeType.moTa || "",
       batBuoc: feeType.batBuoc || false,
       dinhMuc: feeType.dinhMuc?.toString() || "",
+      mucTieu: feeType.mucTieu?.toString() || "",
     });
     setSelectedFeeType(feeType);
     setFormErrors({});
@@ -92,8 +146,13 @@ export default function FeeTypesManagement() {
     const errors = {};
     if (!formData.tenLoaiPhi.trim()) errors.tenLoaiPhi = "Vui lòng nhập tên loại phí";
     if (!formData.moTa.trim()) errors.moTa = "Vui lòng nhập mô tả";
-    if (!formData.dinhMuc || Number(formData.dinhMuc) <= 0) {
+    // Định mức chỉ bắt buộc nếu là phí bắt buộc
+    if (formData.batBuoc && (!formData.dinhMuc || Number(formData.dinhMuc) <= 0)) {
       errors.dinhMuc = "Vui lòng nhập định mức hợp lệ (lớn hơn 0)";
+    }
+    // Mục tiêu chỉ bắt buộc nếu là đóng góp tự nguyện
+    if (!formData.batBuoc && (!formData.mucTieu || Number(formData.mucTieu) <= 0)) {
+      errors.mucTieu = "Vui lòng nhập mục tiêu hợp lệ (lớn hơn 0)";
     }
     return errors;
   };
@@ -115,7 +174,8 @@ export default function FeeTypesManagement() {
           tenLoaiPhi: formData.tenLoaiPhi,
           moTa: formData.moTa,
           batBuoc: formData.batBuoc,
-          dinhMuc: Number(formData.dinhMuc),
+          dinhMuc: formData.dinhMuc ? Number(formData.dinhMuc) : null,
+          mucTieu: formData.mucTieu ? Number(formData.mucTieu) : null,
         }),
       });
 
@@ -126,7 +186,7 @@ export default function FeeTypesManagement() {
 
       alert("Tạo loại phí mới thành công!");
       setShowCreateModal(false);
-      setFormData({ tenLoaiPhi: "", moTa: "", batBuoc: false, dinhMuc: "" });
+      setFormData({ tenLoaiPhi: "", moTa: "", batBuoc: false, dinhMuc: "", mucTieu: "" });
       setFormErrors({});
       fetchFeeTypes();
     } catch (err) {
@@ -154,7 +214,8 @@ export default function FeeTypesManagement() {
           tenLoaiPhi: formData.tenLoaiPhi,
           moTa: formData.moTa,
           batBuoc: formData.batBuoc,
-          dinhMuc: Number(formData.dinhMuc),
+          dinhMuc: formData.dinhMuc ? Number(formData.dinhMuc) : null,
+          mucTieu: formData.mucTieu ? Number(formData.mucTieu) : null,
         }),
       });
 
@@ -165,7 +226,7 @@ export default function FeeTypesManagement() {
 
       alert("Cập nhật loại phí thành công!");
       setShowEditModal(false);
-      setFormData({ tenLoaiPhi: "", moTa: "", batBuoc: false, dinhMuc: "" });
+      setFormData({ tenLoaiPhi: "", moTa: "", batBuoc: false, dinhMuc: "", mucTieu: "" });
       setFormErrors({});
       setSelectedFeeType(null);
       fetchFeeTypes();
@@ -204,15 +265,15 @@ export default function FeeTypesManagement() {
                   <p className="text-xs uppercase tracking-[0.3em] text-blue-200">Module</p>
                   <h1 className="text-3xl font-semibold text-white flex items-center gap-3">
                     <DollarSign className="w-8 h-8 text-blue-300" />
-                    Quản lý các loại phí
+                    Quản lý các loại phí bắt buộc
                   </h1>
                   <p className="text-gray-300 mt-1 max-w-2xl">
-                    Quản lý danh sách các loại phí, xem chi tiết, tạo mới, chỉnh sửa và xóa loại phí.
+                    Quản lý danh sách các loại phí bắt buộc, xem chi tiết, tạo mới, chỉnh sửa và xóa loại phí.
                   </p>
                 </div>
                 <button
                   onClick={() => {
-                    setFormData({ tenLoaiPhi: "", moTa: "", batBuoc: false, dinhMuc: "" });
+                    setFormData({ tenLoaiPhi: "", moTa: "", batBuoc: false, dinhMuc: "", mucTieu: "" });
                     setFormErrors({});
                     setShowCreateModal(true);
                   }}
@@ -231,7 +292,7 @@ export default function FeeTypesManagement() {
 
               <section className="bg-gray-900/80 border border-white/5 rounded-3xl shadow-2xl shadow-black/40">
                 <div className="p-6 border-b border-white/5">
-                  <h2 className="text-xl font-semibold text-white">Danh sách các loại phí</h2>
+                  <h2 className="text-xl font-semibold text-white">Danh sách các loại phí bắt buộc</h2>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -246,6 +307,7 @@ export default function FeeTypesManagement() {
                           <th className="px-6 py-4 text-left">Mã loại phí</th>
                           <th className="px-6 py-4 text-left">Tên loại phí</th>
                           <th className="px-6 py-4 text-left">Mô tả</th>
+                          <th className="px-6 py-4 text-left">Tổng số tiền đã thu</th>
                           <th className="px-6 py-4 text-left">Định mức</th>
                           <th className="px-6 py-4 text-center">Bắt buộc</th>
                           <th className="px-6 py-4 text-center">Thao tác</th>
@@ -260,6 +322,15 @@ export default function FeeTypesManagement() {
                             <td className="px-6 py-4 text-white font-semibold">{feeType.maLoaiPhi}</td>
                             <td className="px-6 py-4 text-white font-medium">{feeType.tenLoaiPhi}</td>
                             <td className="px-6 py-4 text-gray-300">{feeType.moTa || "—"}</td>
+                            <td className="px-6 py-4">
+                              {loadingTotals ? (
+                                <span className="text-gray-400 text-xs">Đang tải...</span>
+                              ) : (
+                                <span className="inline-flex px-3 py-1 rounded-full text-sm font-semibold bg-blue-500/10 text-blue-200 border border-blue-500/40">
+                                  {formatCurrency(feeTotals[feeType.maLoaiPhi] || 0)}
+                                </span>
+                              )}
+                            </td>
                             <td className="px-6 py-4 text-gray-300">{formatCurrency(feeType.dinhMuc || 0)}</td>
                             <td className="px-6 py-4 text-center">
                               {feeType.batBuoc ? (
@@ -434,34 +505,58 @@ export default function FeeTypesManagement() {
                 {formErrors.moTa && <span className="text-xs text-red-400">{formErrors.moTa}</span>}
               </label>
 
-              <label className="text-sm text-gray-300 block">
-                Định mức (VND) *
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
-                    formErrors.dinhMuc ? "border-red-500" : "border-gray-700 focus:border-blue-500"
-                  }`}
-                  value={formData.dinhMuc}
-                  onChange={(e) => {
-                    setFormData({ ...formData, dinhMuc: e.target.value });
-                    setFormErrors({ ...formErrors, dinhMuc: "" });
-                  }}
-                  placeholder="50000"
-                />
-                {formErrors.dinhMuc && <span className="text-xs text-red-400">{formErrors.dinhMuc}</span>}
-              </label>
-
               <label className="flex items-center gap-3 text-sm text-gray-300">
                 <input
                   type="checkbox"
                   className="w-5 h-5 rounded bg-gray-900 border-gray-700 text-blue-600 focus:ring-blue-500"
                   checked={formData.batBuoc}
-                  onChange={(e) => setFormData({ ...formData, batBuoc: e.target.checked })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, batBuoc: e.target.checked, dinhMuc: "", mucTieu: "" });
+                    setFormErrors({ ...formErrors, dinhMuc: "", mucTieu: "" });
+                  }}
                 />
                 <span>Bắt buộc (Tất cả hộ phải đóng phí này)</span>
               </label>
+
+              {formData.batBuoc ? (
+                <label className="text-sm text-gray-300 block">
+                  Định mức (VND) *
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
+                      formErrors.dinhMuc ? "border-red-500" : "border-gray-700 focus:border-blue-500"
+                    }`}
+                    value={formData.dinhMuc}
+                    onChange={(e) => {
+                      setFormData({ ...formData, dinhMuc: e.target.value });
+                      setFormErrors({ ...formErrors, dinhMuc: "" });
+                    }}
+                    placeholder="50000"
+                  />
+                  {formErrors.dinhMuc && <span className="text-xs text-red-400">{formErrors.dinhMuc}</span>}
+                </label>
+              ) : (
+                <label className="text-sm text-gray-300 block">
+                  Mục tiêu (VND) *
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
+                      formErrors.mucTieu ? "border-red-500" : "border-gray-700 focus:border-blue-500"
+                    }`}
+                    value={formData.mucTieu}
+                    onChange={(e) => {
+                      setFormData({ ...formData, mucTieu: e.target.value });
+                      setFormErrors({ ...formErrors, mucTieu: "" });
+                    }}
+                    placeholder="50000000"
+                  />
+                  {formErrors.mucTieu && <span className="text-xs text-red-400">{formErrors.mucTieu}</span>}
+                </label>
+              )}
 
               <div className="flex gap-3 mt-6">
                 <button
@@ -542,34 +637,58 @@ export default function FeeTypesManagement() {
                 {formErrors.moTa && <span className="text-xs text-red-400">{formErrors.moTa}</span>}
               </label>
 
-              <label className="text-sm text-gray-300 block">
-                Định mức (VND) *
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
-                    formErrors.dinhMuc ? "border-red-500" : "border-gray-700 focus:border-blue-500"
-                  }`}
-                  value={formData.dinhMuc}
-                  onChange={(e) => {
-                    setFormData({ ...formData, dinhMuc: e.target.value });
-                    setFormErrors({ ...formErrors, dinhMuc: "" });
-                  }}
-                  placeholder="50000"
-                />
-                {formErrors.dinhMuc && <span className="text-xs text-red-400">{formErrors.dinhMuc}</span>}
-              </label>
-
               <label className="flex items-center gap-3 text-sm text-gray-300">
                 <input
                   type="checkbox"
                   className="w-5 h-5 rounded bg-gray-900 border-gray-700 text-blue-600 focus:ring-blue-500"
                   checked={formData.batBuoc}
-                  onChange={(e) => setFormData({ ...formData, batBuoc: e.target.checked })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, batBuoc: e.target.checked, dinhMuc: "", mucTieu: "" });
+                    setFormErrors({ ...formErrors, dinhMuc: "", mucTieu: "" });
+                  }}
                 />
                 <span>Bắt buộc (Tất cả hộ phải đóng phí này)</span>
               </label>
+
+              {formData.batBuoc ? (
+                <label className="text-sm text-gray-300 block">
+                  Định mức (VND) *
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
+                      formErrors.dinhMuc ? "border-red-500" : "border-gray-700 focus:border-blue-500"
+                    }`}
+                    value={formData.dinhMuc}
+                    onChange={(e) => {
+                      setFormData({ ...formData, dinhMuc: e.target.value });
+                      setFormErrors({ ...formErrors, dinhMuc: "" });
+                    }}
+                    placeholder="50000"
+                  />
+                  {formErrors.dinhMuc && <span className="text-xs text-red-400">{formErrors.dinhMuc}</span>}
+                </label>
+              ) : (
+                <label className="text-sm text-gray-300 block">
+                  Mục tiêu (VND) *
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
+                      formErrors.mucTieu ? "border-red-500" : "border-gray-700 focus:border-blue-500"
+                    }`}
+                    value={formData.mucTieu}
+                    onChange={(e) => {
+                      setFormData({ ...formData, mucTieu: e.target.value });
+                      setFormErrors({ ...formErrors, mucTieu: "" });
+                    }}
+                    placeholder="50000000"
+                  />
+                  {formErrors.mucTieu && <span className="text-xs text-red-400">{formErrors.mucTieu}</span>}
+                </label>
+              )}
 
               <div className="flex gap-3 mt-6">
                 <button

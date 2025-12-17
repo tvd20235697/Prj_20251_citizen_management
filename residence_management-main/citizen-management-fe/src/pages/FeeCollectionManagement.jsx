@@ -19,7 +19,6 @@ export default function FeeCollectionManagement() {
   const [formData, setFormData] = useState({
     soHoKhau: "",
     maDotThu: "",
-    maLoai: "",
     soTien: "",
     ngayDong: "",
     ghiChu: "",
@@ -51,13 +50,11 @@ export default function FeeCollectionManagement() {
 
   const fetchCollectionPeriods = async () => {
     try {
-      // Giả sử có API này, nếu không có thì có thể hardcode hoặc lấy từ collections
-      // const res = await fetch(`${API_BASE}/dot-thu`);
-      // if (res.ok) {
-      //   const data = await res.json();
-      //   setCollectionPeriods(data || []);
-      // }
-      // Tạm thời để trống, có thể lấy từ danh sách collections
+      const res = await fetch(`${API_BASE}/dot-thu`);
+      if (res.ok) {
+        const data = await res.json();
+        setCollectionPeriods(data || []);
+      }
     } catch (err) {
       console.error("Error fetching collection periods:", err);
     }
@@ -100,7 +97,6 @@ export default function FeeCollectionManagement() {
     setFormData({
       soHoKhau: collection.soHoKhau?.toString() || "",
       maDotThu: collection.maDotThu?.toString() || "",
-      maLoai: collection.maLoai?.toString() || "",
       soTien: collection.soTien?.toString() || "",
       ngayDong: collection.ngayDong ? collection.ngayDong.slice(0, 16) : "",
       ghiChu: collection.ghiChu || "",
@@ -129,7 +125,6 @@ export default function FeeCollectionManagement() {
     const errors = {};
     if (!formData.soHoKhau) errors.soHoKhau = "Vui lòng nhập số hộ khẩu";
     if (!formData.maDotThu) errors.maDotThu = "Vui lòng chọn đợt thu";
-    if (!formData.maLoai) errors.maLoai = "Vui lòng chọn loại phí";
     if (!formData.soTien || Number(formData.soTien) <= 0) {
       errors.soTien = "Vui lòng nhập số tiền hợp lệ (lớn hơn 0)";
     }
@@ -153,7 +148,6 @@ export default function FeeCollectionManagement() {
         body: JSON.stringify({
           soHoKhau: Number(formData.soHoKhau),
           maDotThu: Number(formData.maDotThu),
-          maLoai: Number(formData.maLoai),
           soTien: Number(formData.soTien),
           ngayDong: formData.ngayDong ? `${formData.ngayDong}:00` : null,
           ghiChu: formData.ghiChu || "",
@@ -170,7 +164,6 @@ export default function FeeCollectionManagement() {
       setFormData({
         soHoKhau: "",
         maDotThu: "",
-        maLoai: "",
         soTien: "",
         ngayDong: "",
         ghiChu: "",
@@ -201,7 +194,6 @@ export default function FeeCollectionManagement() {
         body: JSON.stringify({
           soHoKhau: Number(formData.soHoKhau),
           maDotThu: Number(formData.maDotThu),
-          maLoai: Number(formData.maLoai),
           soTien: Number(formData.soTien),
           ngayDong: formData.ngayDong ? `${formData.ngayDong}:00` : null,
           ghiChu: formData.ghiChu || "",
@@ -218,7 +210,6 @@ export default function FeeCollectionManagement() {
       setFormData({
         soHoKhau: "",
         maDotThu: "",
-        maLoai: "",
         soTien: "",
         ngayDong: "",
         ghiChu: "",
@@ -258,16 +249,17 @@ export default function FeeCollectionManagement() {
     return collection.maLoai?.toString() === selectedFeeTypeFilter;
   });
 
-  // Get unique collection periods from collections
-  const uniquePeriods = Array.from(
-    new Set(collections.map((c) => c.maDotThu).filter(Boolean))
-  ).map((id) => {
-    const collection = collections.find((c) => c.maDotThu === id);
-    return {
-      maDotThu: id,
-      tenDotThu: collection?.tenDotThu || `Đợt thu ${id}`,
-    };
-  });
+  // Format datetime for input
+  const formatDateTimeForInput = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
 
   return (
     <div className="relative min-h-screen bg-gray-900 text-gray-100">
@@ -300,7 +292,6 @@ export default function FeeCollectionManagement() {
                     setFormData({
                       soHoKhau: "",
                       maDotThu: "",
-                      maLoai: "",
                       soTien: "",
                       ngayDong: "",
                       ghiChu: "",
@@ -557,7 +548,7 @@ export default function FeeCollectionManagement() {
                     }}
                   >
                     <option value="">Chọn đợt thu</option>
-                    {uniquePeriods.map((period) => (
+                    {collectionPeriods.map((period) => (
                       <option key={period.maDotThu} value={period.maDotThu}>
                         {period.tenDotThu}
                       </option>
@@ -569,31 +560,6 @@ export default function FeeCollectionManagement() {
                 </label>
               </div>
 
-              <label className="text-sm text-gray-300 block">
-                Loại phí *
-                <select
-                  className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
-                    formErrors.maLoai
-                      ? "border-red-500"
-                      : "border-gray-700 focus:border-blue-500"
-                  }`}
-                  value={formData.maLoai}
-                  onChange={(e) => {
-                    setFormData({ ...formData, maLoai: e.target.value });
-                    setFormErrors({ ...formErrors, maLoai: "" });
-                  }}
-                >
-                  <option value="">Chọn loại phí</option>
-                  {feeTypes.map((feeType) => (
-                    <option key={feeType.maLoaiPhi} value={feeType.maLoaiPhi}>
-                      {feeType.tenLoaiPhi}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.maLoai && (
-                  <span className="text-xs text-red-400">{formErrors.maLoai}</span>
-                )}
-              </label>
 
               <div className="grid grid-cols-2 gap-4">
                 <label className="text-sm text-gray-300 block">
@@ -732,7 +698,7 @@ export default function FeeCollectionManagement() {
                     }}
                   >
                     <option value="">Chọn đợt thu</option>
-                    {uniquePeriods.map((period) => (
+                    {collectionPeriods.map((period) => (
                       <option key={period.maDotThu} value={period.maDotThu}>
                         {period.tenDotThu}
                       </option>
@@ -744,31 +710,6 @@ export default function FeeCollectionManagement() {
                 </label>
               </div>
 
-              <label className="text-sm text-gray-300 block">
-                Loại phí *
-                <select
-                  className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
-                    formErrors.maLoai
-                      ? "border-red-500"
-                      : "border-gray-700 focus:border-blue-500"
-                  }`}
-                  value={formData.maLoai}
-                  onChange={(e) => {
-                    setFormData({ ...formData, maLoai: e.target.value });
-                    setFormErrors({ ...formErrors, maLoai: "" });
-                  }}
-                >
-                  <option value="">Chọn loại phí</option>
-                  {feeTypes.map((feeType) => (
-                    <option key={feeType.maLoaiPhi} value={feeType.maLoaiPhi}>
-                      {feeType.tenLoaiPhi}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.maLoai && (
-                  <span className="text-xs text-red-400">{formErrors.maLoai}</span>
-                )}
-              </label>
 
               <div className="grid grid-cols-2 gap-4">
                 <label className="text-sm text-gray-300 block">

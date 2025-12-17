@@ -16,16 +16,59 @@ export default function CollectionPeriodsManagement() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   const [formData, setFormData] = useState({
+    maLoai: "",
     tenDotThu: "",
     ngayBatDau: "",
     ngayKetThuc: "",
   });
+
+  // Load fee types for dropdown
+  const [feeTypes, setFeeTypes] = useState([]);
+  const [periodFeeTypes, setPeriodFeeTypes] = useState({}); // Map maDotThu -> feeType info
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchPeriods();
+    fetchFeeTypes();
   }, []);
+
+  useEffect(() => {
+    // Fetch fee type details for each period
+    if (periods.length > 0) {
+      fetchPeriodFeeTypes();
+    }
+  }, [periods]);
+
+  const fetchFeeTypes = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/loai-phi`);
+      if (res.ok) {
+        const data = await res.json();
+        setFeeTypes(data || []);
+      }
+    } catch (err) {
+      console.error("Error fetching fee types:", err);
+    }
+  };
+
+  const fetchPeriodFeeTypes = async () => {
+    const feeTypeMap = {};
+    await Promise.all(
+      periods.map(async (period) => {
+        try {
+          const res = await fetch(`${API_BASE}/loai-phi/${period.maLoai}`);
+          if (res.ok) {
+            const data = await res.json();
+            feeTypeMap[period.maDotThu] = data;
+          }
+        } catch (err) {
+          console.error(`Error fetching fee type for period ${period.maDotThu}:`, err);
+        }
+      })
+    );
+    setPeriodFeeTypes(feeTypeMap);
+  };
 
   const fetchPeriods = async () => {
     try {
@@ -62,6 +105,7 @@ export default function CollectionPeriodsManagement() {
 
   const handleEdit = (period) => {
     setFormData({
+      maLoai: period.maLoai?.toString() || "",
       tenDotThu: period.tenDotThu || "",
       ngayBatDau: period.ngayBatDau ? period.ngayBatDau.slice(0, 16) : "",
       ngayKetThuc: period.ngayKetThuc ? period.ngayKetThuc.slice(0, 16) : "",
@@ -88,6 +132,7 @@ export default function CollectionPeriodsManagement() {
 
   const validateForm = () => {
     const errors = {};
+    if (!formData.maLoai) errors.maLoai = "Vui lòng chọn loại phí";
     if (!formData.tenDotThu.trim()) errors.tenDotThu = "Vui lòng nhập tên đợt thu";
     if (!formData.ngayBatDau) errors.ngayBatDau = "Vui lòng chọn ngày bắt đầu";
     if (!formData.ngayKetThuc) errors.ngayKetThuc = "Vui lòng chọn ngày kết thúc";
@@ -117,6 +162,7 @@ export default function CollectionPeriodsManagement() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          maLoai: Number(formData.maLoai),
           tenDotThu: formData.tenDotThu,
           ngayBatDau: formData.ngayBatDau ? `${formData.ngayBatDau}:00` : null,
           ngayKetThuc: formData.ngayKetThuc ? `${formData.ngayKetThuc}:59` : null,
@@ -130,7 +176,7 @@ export default function CollectionPeriodsManagement() {
 
       alert("Tạo đợt thu mới thành công!");
       setShowCreateModal(false);
-      setFormData({ tenDotThu: "", ngayBatDau: "", ngayKetThuc: "" });
+      setFormData({ maLoai: "", tenDotThu: "", ngayBatDau: "", ngayKetThuc: "" });
       setFormErrors({});
       fetchPeriods();
     } catch (err) {
@@ -155,6 +201,7 @@ export default function CollectionPeriodsManagement() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          maLoai: Number(formData.maLoai),
           tenDotThu: formData.tenDotThu,
           ngayBatDau: formData.ngayBatDau ? `${formData.ngayBatDau}:00` : null,
           ngayKetThuc: formData.ngayKetThuc ? `${formData.ngayKetThuc}:59` : null,
@@ -168,7 +215,7 @@ export default function CollectionPeriodsManagement() {
 
       alert("Cập nhật đợt thu thành công!");
       setShowEditModal(false);
-      setFormData({ tenDotThu: "", ngayBatDau: "", ngayKetThuc: "" });
+      setFormData({ maLoai: "", tenDotThu: "", ngayBatDau: "", ngayKetThuc: "" });
       setFormErrors({});
       setSelectedPeriod(null);
       fetchPeriods();
@@ -233,7 +280,7 @@ export default function CollectionPeriodsManagement() {
                 </div>
                 <button
                   onClick={() => {
-                    setFormData({ tenDotThu: "", ngayBatDau: "", ngayKetThuc: "" });
+                    setFormData({ maLoai: "", tenDotThu: "", ngayBatDau: "", ngayKetThuc: "" });
                     setFormErrors({});
                     setShowCreateModal(true);
                   }}
@@ -265,6 +312,7 @@ export default function CollectionPeriodsManagement() {
                       <thead className="bg-white/5 text-gray-400 uppercase">
                         <tr>
                           <th className="px-6 py-4 text-left">Mã đợt thu</th>
+                          <th className="px-6 py-4 text-left">Loại phí</th>
                           <th className="px-6 py-4 text-left">Tên đợt thu</th>
                           <th className="px-6 py-4 text-left">Ngày bắt đầu</th>
                           <th className="px-6 py-4 text-left">Ngày kết thúc</th>
@@ -281,6 +329,9 @@ export default function CollectionPeriodsManagement() {
                               className="border-b border-white/5 hover:bg-white/5 transition"
                             >
                               <td className="px-6 py-4 text-white font-semibold">{period.maDotThu}</td>
+                              <td className="px-6 py-4 text-white font-medium">
+                                {periodFeeTypes[period.maDotThu]?.tenLoaiPhi || `Loại phí ${period.maLoai}`}
+                              </td>
                               <td className="px-6 py-4 text-white font-medium">{period.tenDotThu}</td>
                               <td className="px-6 py-4 text-gray-300">{formatDate(period.ngayBatDau)}</td>
                               <td className="px-6 py-4 text-gray-300">{formatDate(period.ngayKetThuc)}</td>
@@ -350,6 +401,12 @@ export default function CollectionPeriodsManagement() {
                 <p className="text-white font-semibold mt-1">{selectedPeriod.maDotThu}</p>
               </div>
               <div className="rounded-2xl border border-white/10 p-4">
+                <p className="text-xs uppercase text-gray-400">Loại phí</p>
+                <p className="text-white font-semibold mt-1">
+                  {periodFeeTypes[selectedPeriod.maDotThu]?.tenLoaiPhi || `Loại phí ${selectedPeriod.maLoai}`}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 p-4">
                 <p className="text-xs uppercase text-gray-400">Tên đợt thu</p>
                 <p className="text-white font-semibold mt-1">{selectedPeriod.tenDotThu}</p>
               </div>
@@ -411,6 +468,30 @@ export default function CollectionPeriodsManagement() {
               </button>
             </div>
             <form onSubmit={handleCreate} className="space-y-4">
+              <label className="text-sm text-gray-300 block">
+                Loại phí *
+                <select
+                  className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
+                    formErrors.maLoai ? "border-red-500" : "border-gray-700 focus:border-blue-500"
+                  }`}
+                  value={formData.maLoai}
+                  onChange={(e) => {
+                    setFormData({ ...formData, maLoai: e.target.value });
+                    setFormErrors({ ...formErrors, maLoai: "" });
+                  }}
+                >
+                  <option value="">Chọn loại phí</option>
+                  {feeTypes.map((feeType) => (
+                    <option key={feeType.maLoaiPhi} value={feeType.maLoaiPhi}>
+                      {feeType.tenLoaiPhi}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.maLoai && (
+                  <span className="text-xs text-red-400">{formErrors.maLoai}</span>
+                )}
+              </label>
+
               <label className="text-sm text-gray-300 block">
                 Tên đợt thu *
                 <input
@@ -510,6 +591,30 @@ export default function CollectionPeriodsManagement() {
                 <p className="text-xs uppercase text-gray-400">Mã đợt thu</p>
                 <p className="text-white font-semibold mt-1">{selectedPeriod.maDotThu}</p>
               </div>
+
+              <label className="text-sm text-gray-300 block">
+                Loại phí *
+                <select
+                  className={`mt-2 w-full rounded-xl bg-gray-900 border px-3 py-2 focus:outline-none ${
+                    formErrors.maLoai ? "border-red-500" : "border-gray-700 focus:border-blue-500"
+                  }`}
+                  value={formData.maLoai}
+                  onChange={(e) => {
+                    setFormData({ ...formData, maLoai: e.target.value });
+                    setFormErrors({ ...formErrors, maLoai: "" });
+                  }}
+                >
+                  <option value="">Chọn loại phí</option>
+                  {feeTypes.map((feeType) => (
+                    <option key={feeType.maLoaiPhi} value={feeType.maLoaiPhi}>
+                      {feeType.tenLoaiPhi}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.maLoai && (
+                  <span className="text-xs text-red-400">{formErrors.maLoai}</span>
+                )}
+              </label>
 
               <label className="text-sm text-gray-300 block">
                 Tên đợt thu *
