@@ -1,0 +1,318 @@
+CREATE DATABASE household_management
+CREATE TABLE THANHPHO (
+    MATHANHPHO INT IDENTITY(1,1) PRIMARY KEY,
+    TENTHANHPHO VARCHAR(100)
+);
+CREATE TABLE QUANHUYEN (
+    MAQUANHUYEN INT IDENTITY(1,1) PRIMARY KEY,
+    TENQUANHUYEN VARCHAR(100),
+    MATHANHPHO INT,
+    FOREIGN KEY (MATHANHPHO) REFERENCES THANHPHO(MATHANHPHO)
+);
+CREATE TABLE XAPHUONG (
+    MAXAPHUONG INT IDENTITY(1,1) PRIMARY KEY,
+    TENXAPHUONG VARCHAR(100),
+    MAQUANHUYEN INT,
+    FOREIGN KEY (MAQUANHUYEN) REFERENCES QUANHUYEN(MAQUANHUYEN)
+);
+-----------------------------------------
+CREATE TABLE HOKHAU (
+    SOHOKHAU INT IDENTITY(1,1) PRIMARY KEY,
+    DIACHI VARCHAR(MAX),
+    MAXAPHUONG INT,
+    NGAYCAP DATE,
+    GHICHU VARCHAR(MAX),
+    FOREIGN KEY (MAXAPHUONG) REFERENCES XAPHUONG(MAXAPHUONG)
+);
+CREATE TABLE NHANKHAU (
+    MANHANKHAU INT IDENTITY(1,1) PRIMARY KEY,
+    SOHOKHAU INT,
+    HOTEN VARCHAR(100),
+    GIOITINH VARCHAR(10),
+    NGAYSINH DATE,
+    NGHENGHIEP VARCHAR(100),
+    QUANHEVOICHUHO VARCHAR(50),
+    TRANGTHAI VARCHAR(50) DEFAULT 'Thường trú',
+    FOREIGN KEY (SOHOKHAU) REFERENCES HOKHAU(SOHOKHAU)
+);
+----------------------------------------thong tin lien lac
+CREATE TABLE ContactInfo (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    MaNhanKhau INT,
+    Type VARCHAR(20),
+    Value VARCHAR(255),
+    IsPrimary BIT DEFAULT 0,
+    FOREIGN KEY (MaNhanKhau) REFERENCES NHANKHAU(MANHANKHAU)
+);
+
+-- Indexes
+CREATE INDEX idx_contact_nhankhau_type 
+    ON ContactInfo (MaNhanKhau, Type);
+
+CREATE INDEX idx_contact_primary 
+    ON ContactInfo (MaNhanKhau, IsPrimary);
+------------------------------------------bien dong nhan khau
+CREATE TABLE BIENDONGNHANKHAU (
+    MABIENDONG INT IDENTITY(1,1) PRIMARY KEY,
+    MANHANKHAU INT,
+    LOAIBIENDONG VARCHAR(50),
+    NGAYBATDAU DATE,
+    NGAYKETTHUC DATE,
+    LYDODOICHUYENDI VARCHAR(MAX),
+    FOREIGN KEY (MANHANKHAU) REFERENCES NHANKHAU(MANHANKHAU)
+);
+-------------------------giay to
+CREATE TABLE GIAYTO (
+    MAGIAYTO INT IDENTITY(1,1) PRIMARY KEY,
+    MANHANKHAU INT,
+    LOAIGIAYTO VARCHAR(50),
+    SOGIAYTO VARCHAR(50),
+    NGAYCAP DATE,
+    NOICAP VARCHAR(100),
+    FOREIGN KEY (MANHANKHAU) REFERENCES NHANKHAU(MANHANKHAU)
+);
+------------------------------canbo-tai khoan
+CREATE TABLE CANBO (
+    MACANBO INT IDENTITY(1,1) PRIMARY KEY,
+    HOTEN VARCHAR(100),
+    CHUCVU VARCHAR(50),
+    MAXAPHUONG INT,
+    FOREIGN KEY (MAXAPHUONG) REFERENCES XAPHUONG(MAXAPHUONG)
+);
+CREATE TABLE TAIKHOAN (
+    MATAIKHOAN INT IDENTITY(1,1) PRIMARY KEY,
+    MACANBO INT,
+    TENDANGNHAP VARCHAR(50) UNIQUE,
+    MATKHAU VARCHAR(100),
+    VAITRO VARCHAR(50),
+    FOREIGN KEY (MACANBO) REFERENCES CANBO(MACANBO)
+);
+------------------------------------------thu phi-dong gop
+CREATE TABLE LOAIPHI (
+    MALOAI INT IDENTITY(1,1) PRIMARY KEY,
+    TENLOAIPHI VARCHAR(100),
+    MOTA VARCHAR(MAX),
+    BATBUOC BIT DEFAULT 0,
+    DINHMUC NUMERIC(12,2),
+    CONSTRAINT uniq_tenloaiphi UNIQUE (TENLOAIPHI)
+);
+CREATE TABLE DOTTHU (
+    MADOTTHU INT IDENTITY(1,1) PRIMARY KEY,
+    TENDOTTHU VARCHAR(100),
+    NGAYBATDAU DATE,
+    NGAYKETTHUC DATE
+);
+CREATE TABLE THUPHI (
+    MATHUPHI INT IDENTITY(1,1) PRIMARY KEY,
+    SOHOKHAU INT,
+    MADOTTHU INT,
+    MALOAI INT,
+    SOTIEN NUMERIC(12,2),
+    NGAYDONG DATE,
+    GHICHU VARCHAR(MAX),
+    FOREIGN KEY (SOHOKHAU) REFERENCES HOKHAU(SOHOKHAU),
+    FOREIGN KEY (MADOTTHU) REFERENCES DOTTHU(MADOTTHU),
+    FOREIGN KEY (MALOAI) REFERENCES LOAIPHI(MALOAI)
+);
+
+CREATE INDEX idx_thuphi_ho_dot_loai
+    ON THUPHI (SOHOKHAU, MADOTTHU, MALOAI);
+------------------------------------------tam tru-tam vang
+CREATE TABLE TamTru (
+    MaTamTru INT IDENTITY(1,1) PRIMARY KEY,
+    MaNhanKhau INT,
+    NoiTamTru VARCHAR(255),
+    TuNgay DATE,
+    DenNgay DATE NULL,
+    LyDo VARCHAR(MAX),
+    TrangThai VARCHAR(50) DEFAULT 'Đang tạm trú',
+    GhiChu VARCHAR(MAX),
+    FOREIGN KEY (MaNhanKhau) REFERENCES NHANKHAU(MANHANKHAU)
+);
+
+CREATE INDEX idx_tamtru_nhankhau_ngay
+    ON TamTru (MaNhanKhau, TuNgay);
+CREATE TABLE TamVang (
+    MaTamVang INT IDENTITY(1,1) PRIMARY KEY,
+    MaNhanKhau INT,
+    NoiDi VARCHAR(255),
+    TuNgay DATE,
+    DenNgay DATE NULL,
+    LyDo VARCHAR(MAX),
+    TrangThai VARCHAR(50) DEFAULT 'Đang tạm vắng',
+    GhiChu VARCHAR(MAX),
+    FOREIGN KEY (MaNhanKhau) REFERENCES NHANKHAU(MANHANKHAU)
+);
+
+CREATE INDEX idx_tamvang_nhankhau_ngay
+    ON TamVang (MaNhanKhau, TuNgay);
+
+
+-- =============================================
+-- Script SQL Server cho hệ thống quản lý hộ khẩu
+-- Cập nhật bảng NHANKHAU và tạo các bảng lịch sử
+-- =============================================
+
+-- =============================================
+-- 1. CẬP NHẬT BẢNG NHANKHAU - Thêm các cột mới
+-- =============================================
+
+-- thêm cột CMND 
+
+    ALTER TABLE NHANKHAU
+    ADD CMND VARCHAR(20) NULL;
+    PRINT 'Đã thêm cột CMND vào bảng NHANKHAU';
+
+-- thêm cột NOITHUONGTRUCHUYENDEN 
+    ALTER TABLE NHANKHAU
+    ADD NOITHUONGTRUCHUYENDEN VARCHAR(200) NULL;
+    PRINT 'Đã thêm cột NOITHUONGTRUCHUYENDEN vào bảng NHANKHAU';
+
+-- thêm cột NGAYCHUYENDI
+
+    ALTER TABLE NHANKHAU
+    ADD NGAYCHUYENDI DATETIME NULL;
+    PRINT 'Đã thêm cột NGAYCHUYENDI vào bảng NHANKHAU';
+
+-- thêm cột NOICHUYEN
+    ALTER TABLE NHANKHAU
+    ADD NOICHUYEN VARCHAR(200) NULL;
+    PRINT 'Đã thêm cột NOICHUYEN vào bảng NHANKHAU';
+
+-- thêm cột GHICHU
+    ALTER TABLE NHANKHAU
+    ADD GHICHU VARCHAR(MAX) NULL;
+    PRINT 'Đã thêm cột GHICHU vào bảng NHANKHAU';
+
+-- =============================================
+-- 2. TẠO BẢNG LỊCH SỬ THAY ĐỔI NHÂN KHẨU
+-- =============================================
+
+    CREATE TABLE LICHSU_THAYDOI_NHANKHAU (
+        MALICHSUTHAYDOI INT IDENTITY(1,1) PRIMARY KEY,
+        MANHANKHAU INT NOT NULL,
+        LOAITHAYDOI VARCHAR(50) NULL,
+        NOIDUNGTHAYDOI VARCHAR(MAX) NULL,
+        NGAYTHAYDOI DATETIME NOT NULL,
+        GHICHU VARCHAR(MAX) NULL,
+        
+        CONSTRAINT FK_LICHSU_NHANKHAU 
+            FOREIGN KEY (MANHANKHAU) 
+            REFERENCES NHANKHAU(MANHANKHAU)
+            ON DELETE CASCADE
+    );
+    
+    -- Tạo index để tăng hiệu suất truy vấn
+    CREATE INDEX IX_LICHSU_NHANKHAU_MANHANKHAU 
+        ON LICHSU_THAYDOI_NHANKHAU(MANHANKHAU);
+    
+    CREATE INDEX IX_LICHSU_NHANKHAU_NGAYTHAYDOI 
+        ON LICHSU_THAYDOI_NHANKHAU(NGAYTHAYDOI DESC);
+
+-- =============================================
+-- 3. TẠO BẢNG LỊCH SỬ THAY ĐỔI HỘ KHẨU
+-- =============================================
+
+    CREATE TABLE LICHSU_THAYDOI_HOKHAU (
+        MALICHSUTHAYDOI INT IDENTITY(1,1) PRIMARY KEY,
+        SOHOKHAU INT NOT NULL,
+        NOIDUNGTHAYDOI VARCHAR(MAX) NULL,
+        NGAYTHAYDOI DATETIME NOT NULL,
+        GHICHU VARCHAR(MAX) NULL,
+        
+        CONSTRAINT FK_LICHSU_HOKHAU 
+            FOREIGN KEY (SOHOKHAU) 
+            REFERENCES HOKHAU(SOHOKHAU)
+            ON DELETE CASCADE
+    );
+    
+    -- Tạo index để tăng hiệu suất truy vấn
+    CREATE INDEX IX_LICHSU_HOKHAU_SOHOKHAU 
+        ON LICHSU_THAYDOI_HOKHAU(SOHOKHAU);
+    
+    CREATE INDEX IX_LICHSU_HOKHAU_NGAYTHAYDOI 
+        ON LICHSU_THAYDOI_HOKHAU(NGAYTHAYDOI DESC);
+    
+
+
+-- =============================================
+-- 4. TẠO CÁC VIEW HỖ TRỢ (Tùy chọn)
+-- =============================================
+
+-- View tổng hợp thông tin nhân khẩu và hộ khẩu
+IF EXISTS (SELECT * FROM sys.views WHERE name = 'VW_NHANKHAU_CHITIET')
+    DROP VIEW VW_NHANKHAU_CHITIET;
+GO
+
+CREATE VIEW VW_NHANKHAU_CHITIET
+AS
+SELECT 
+    nk.MANHANKHAU,
+    nk.HOTEN,
+    nk.GIOITINH,
+    nk.NGAYSINH,
+    nk.NGHENGHIEP,
+    nk.QUANHEVOICHUHO,
+    nk.TRANGTHAI,
+    nk.CMND,
+    nk.NOITHUONGTRUCHUYENDEN,
+    nk.NGAYCHUYENDI,
+    nk.NOICHUYEN,
+    nk.GHICHU,
+    hk.SOHOKHAU,
+    hk.DIACHI,
+    hk.NGAYCAP,
+    xp.TENXAPHUONG
+FROM NHANKHAU nk
+INNER JOIN HOKHAU hk ON nk.SOHOKHAU = hk.SOHOKHAU
+INNER JOIN XAPHUONG xp ON hk.MAXAPHUONG = xp.MAXAPHUONG;
+
+
+-- =============================================
+-- 7. TẠO STORED PROCEDURE HỖ TRỢ (Tùy chọn)
+-- =============================================
+
+-- Stored Procedure: Lấy lịch sử thay đổi nhân khẩu của một hộ
+
+
+CREATE PROCEDURE SP_GET_LICHSU_NHANKHAU_BY_HOKHAU
+    @SOHOKHAU BIGINT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT 
+        ls.MALICHSUTHAYDOI,
+        ls.MANHANKHAU,
+        nk.HOTEN,
+        ls.LOAITHAYDOI,
+        ls.NOIDUNGTHAYDOI,
+        ls.NGAYTHAYDOI,
+        ls.GHICHU
+    FROM LICHSU_THAYDOI_NHANKHAU ls
+    INNER JOIN NHANKHAU nk ON ls.MANHANKHAU = nk.MANHANKHAU
+    WHERE nk.SOHOKHAU = @SOHOKHAU
+    ORDER BY ls.NGAYTHAYDOI DESC;
+END
+
+
+-- Stored Procedure: Thống kê nhân khẩu theo giới tính
+
+
+CREATE PROCEDURE SP_THONGKE_GIOITINH
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT 
+        GIOITINH,
+        COUNT(*) AS SO_LUONG
+    FROM NHANKHAU
+    WHERE GIOITINH IS NOT NULL
+    GROUP BY GIOITINH;
+END
+
+
+
+
+

@@ -1,0 +1,24 @@
+{
+  "name": "residence_management",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/52Blue05/residence_management.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/52Blue05/residence_management/issues"
+  },
+  "homepage": "https://github.com/52Blue05/residence_management#readme",
+  "description": "",
+  "dependencies": {
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.4"
+  }
+}
